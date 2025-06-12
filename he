@@ -1,0 +1,76 @@
+import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Load cookie value directly from account.json as plain text
+try:
+    with open('account.json', 'r') as file:
+        cookie_value = file.read().strip()
+        if not cookie_value:
+            raise ValueError("account.json is empty.")
+except FileNotFoundError:
+    print("Error: account.json file not found.")
+    exit()
+except Exception as e:
+    print(f"Error reading account.json: {str(e)}")
+    exit()
+
+# Define the base URL and headers
+base_url = "https://avistora.com/agro/"
+headers = {
+    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "accept-encoding": "gzip, deflate, br, zstd",
+    "accept-language": "en-US,en;q=0.9,es;q=0.8",
+    "cache-control": "max-age=0",
+    "cookie": cookie_value,
+    "priority": "u=0, i",
+    "referer": "https://avistora.com/agro/index",
+    "save-data": "on",
+    "sec-ch-ua": "\"Chromium\";v=\"130\", \"Mises\";v=\"130\", \"Not?A_Brand\";v=\"99\"",
+    "sec-ch-ua-mobile": "?1",
+    "sec-ch-ua-platform": "\"Android\"",
+    "sec-fetch-dest": "document",
+    "sec-fetch-mode": "navigate",
+    "sec-fetch-site": "same-origin",
+    "sec-fetch-user": "?1",
+    "upgrade-insecure-requests": "1",
+    "user-agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36"
+}
+
+# Function to send check-in request for a specific day
+def send_checkin(day_num):
+    checkin_url = base_url + "back/calendario"
+    checkin_data = {"dia": str(day_num)}
+    try:
+        checkin_response = requests.post(checkin_url, headers=headers, data=checkin_data)
+        if checkin_response.status_code == 200:
+            return f"Check-in attempt for Day {day_num} successful. Response: {checkin_response.text}"
+        else:
+            return f"Check-in attempt for Day {day_num} failed. Status code: {checkin_response.status_code}"
+    except Exception as e:
+        return f"Error during check-in for Day {day_num}: {str(e)}"
+
+# Step 1: Prompt user for the number of days
+try:
+    num_days = int(input("How many days do you want to check in for? "))
+    if num_days < 1:
+        print("Please enter a positive number of days.")
+        exit()
+except ValueError:
+    print("Please enter a valid number.")
+    exit()
+
+# Step 2: Send check-in requests for all specified days concurrently
+all_days = range(1, num_days + 1)  # Days 1 to num_days
+print(f"Attempting to check in for days: {', '.join(map(str, all_days))}")
+
+with ThreadPoolExecutor() as executor:
+    # Submit all check-in requests at once
+    future_to_day = {executor.submit(send_checkin, day): day for day in all_days}
+    # Collect and print results as they complete
+    for future in as_completed(future_to_day):
+        day = future_to_day[future]
+        try:
+            result = future.result()
+            print(result)
+        except Exception as e:
+            print(f"Error processing Day {day}: {str(e)}")
